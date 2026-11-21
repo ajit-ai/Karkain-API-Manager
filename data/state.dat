@@ -1,0 +1,7 @@
+API|users|/v1/users|GET
+API|orders|/v1/orders|POST
+POLICY|users|100
+POLICY|orders|50
+PUBLISHED|users
+ROUTE|users|/api/users
+ROUTE|orders|/api/orders
