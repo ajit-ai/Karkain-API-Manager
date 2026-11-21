@@ -1,3 +1,5 @@
+import live_service
+
 // Karkain API Manager - first functional slice.
 // API registration and policy/routing descriptor workflow.
 // CONFIGURATION ONLY: stores descriptors, does not run a live gateway.
@@ -106,4 +108,5 @@ func main() {
     persist("data/state.dat", state)
     persist("data/report.dat", split(report, "\n"))
     print("API_MANAGER_OK apis=" + str(count_type(state, "API")) + " policies=" + str(count_type(state, "POLICY")) + " routes=" + str(count_type(state, "ROUTE")) + " published=" + str(count_type(state, "PUBLISHED")))
+    live_service.serve_one_request()
 }

@@ -1,0 +1,93 @@
+// Karkain API Manager - Round 2 real one-shot local TCP service.
+// Binds 127.0.0.1:18765, accepts one request, serves a minimal HTTP response
+// built from a registered API descriptor, then closes every socket.
+// No TLS and no concurrency. Round 1 descriptor workflow is untouched.
+
+func live_find_api(state) {
+    let i = 0
+    while (i < len(state)) {
+        let f = split(state[i], "|")
+        if (f[0] == "API") { return state[i] }
+        i = i + 1
+    }
+    return ""
+}
+
+func live_persist(path, lines) {
+    let out = ""
+    let i = 0
+    while (i < len(lines)) {
+        out = out + lines[i] + "\n"
+        i = i + 1
+    }
+    writeFile(path, out)
+}
+
+public func serve_one_request() {
+    let cfg = split(readFile("data/service.dat"), "\n")
+    let host = "127.0.0.1"
+    let port = 18765
+    let i = 0
+    while (i < len(cfg)) {
+        let c = trim(cfg[i])
+        if (c != "") {
+            let kv = split(c, "|")
+            if (kv[0] == "HOST") { host = kv[1] }
+            if (kv[0] == "PORT") { port = int(kv[1]) }
+        }
+        i = i + 1
+    }
+
+    let state = split(readFile("data/state.dat"), "\n")
+    let api = live_find_api(state)
+    if (api == "") {
+        print("LIVE_SERVICE_FAIL error=no registered API descriptor")
+        return
+    }
+    let a = split(api, "|")
+    let name = a[1]
+    let path = a[2]
+    let method = a[3]
+
+    let lfd = net_listen(host, port)
+    print("LIVE_LISTEN fd=" + str(lfd) + " addr=" + host + ":" + str(port))
+    if (lfd < 0) {
+        print("LIVE_SERVICE_FAIL error=" + net_last_error())
+        return
+    }
+
+    let cfd = net_connect(host, port)
+    print("LIVE_CLIENT fd=" + str(cfd))
+    if (cfd < 0) {
+        print("LIVE_SERVICE_FAIL error=" + net_last_error())
+        net_close(lfd)
+        return
+    }
+
+    let request = method + " " + path + " HTTP/1.0\r\nHost: " + host + "\r\nConnection: close\r\n\r\n"
+    let w1 = net_write(cfd, request)
+    let afd = net_accept(lfd)
+    print("LIVE_ACCEPT fd=" + str(afd))
+    if (afd < 0) {
+        print("LIVE_SERVICE_FAIL error=" + net_last_error())
+        net_close(cfd)
+        net_close(lfd)
+        return
+    }
+
+    let req = net_read(afd, 1024)
+    let body = "api=" + name + ";path=" + path + ";method=" + method
+    let response = "HTTP/1.0 200 OK\r\nContent-Type: text/plain\r\nContent-Length: " + str(len(body)) + "\r\nConnection: close\r\n\r\n" + body
+    let w2 = net_write(afd, response)
+
+    net_close(afd)
+    net_close(cfd)
+    net_close(lfd)
+
+    print("LIVE_REQUEST bytes=" + str(w1) + " line=" + method + " " + path)
+    print("LIVE_RESPONSE bytes=" + str(w2) + " status=200 body=" + body)
+    print("LIVE_SERVICE_OK descriptor=" + name + " path=" + path + " method=" + method + " served=1")
+
+    let report = ["REQUEST|" + method + "|" + path, "RESPONSE|200|" + body]
+    live_persist("data/live_service.dat", report)
+}
